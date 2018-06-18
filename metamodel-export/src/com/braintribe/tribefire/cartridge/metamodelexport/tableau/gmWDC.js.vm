@@ -1,0 +1,310 @@
+(function () {	
+	//debugger;
+	 var sessionId;
+	 var myConnector = tableau.makeConnector();
+	 	
+	 var getCookie = function getCookie(cname) {
+        var name = cname + "=";
+        var decodedCookie = decodeURIComponent(document.cookie);
+        var ca = decodedCookie.split(';');
+        for(var i = 0; i <ca.length; i++) {
+            var c = ca[i];
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
+            }
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+        return "";
+    };
+        
+    var setCookie = function setCookie(cname, cvalue) {
+    	document.cookie = cname + "=" + cvalue + ";path=/";
+    };
+    
+    var getData = function (table, doneCallback){
+   	//var sessionId = "5ef9b659-23bb-46fb-90c0-19013a774686";
+	tableau.log("getData");
+		
+#foreach($type in $model.types)
+#if($type.isType)		
+	if(table.tableInfo.id == "$type.id".split('.').join("_")){
+		var data = new FormData();
+		debugger;
+		data.append('type', 		'$type.id'); 
+		data.append('sessionId',    sessionId);
+	    data.append('accessId',     '$connectionContext.accessId');
+		data.append('depth',     '1');
+		var xhr = new XMLHttpRequest();           
+        xhr.open('POST', "$tableauUtil.createDataUrl($connectionContext)", true);
+        xhr.onload = function () {
+        	var resp = $.parseJSON(this.responseText);
+			var entities = resp instanceof Array ? resp : [resp];
+			entities = normalizeGmJson(entities);
+			var tableData = [];
+#if($type.collProperties.size() > 0)						
+			if(!window.${tableauUtil.replace($type.id)}){
+				window.${tableauUtil.replace($type.id)} = {};
+			}
+#end
+		    for (var i = 0, len = entities.length; i < len; i++) {
+#if($type.collProperties.size() > 0)
+		   		if(!window.${tableauUtil.replace($type.id)}[entities[i].id]){
+					window.${tableauUtil.replace($type.id)}[entities[i].id] = {};
+				}
+#end			    	
+#foreach($prop in $type.collProperties)					
+				window.${tableauUtil.replace($type.id)}[entities[i].id]["${prop.name}"] = entities[i].${prop.name};					
+#end		    		
+				tableData.push({
+#foreach($prop in $type.properties)
+#if($prop.isRefId)
+					"${prop.name}Id": entities[i].${prop.name} != null ? entities[i].${prop.name}.${prop.refIdName} : null,
+#else
+					"${prop.name}": entities[i].${prop.name},
+#end							
+#end
+				});        
+			}					
+			if(tableData.length > 1)
+        		table.appendRows(tableData);
+        	doneCallback();
+        };
+        xhr.send(data);
+    }
+        
+#else
+	if(table.tableInfo.id == "$type.id".split('.').join("_")){
+		var str = table.tableInfo.id; 	
+		var typeName = str.substring(0, str.lastIndexOf("_"));
+		var propertyName = str.substring(str.lastIndexOf("_")+1, str.length);
+		var tableData = [];	
+		for (var id in window[typeName]) {
+			debugger;
+			var values = window[typeName][id][propertyName].value;
+			for(var i = 0, len = values.length; i < len; i++){
+				var v = values[i];
+				tableData.push({
+					"${type.properties.get(0).name}Id" : id,
+					"${type.properties.get(1).name}Id" : v.id
+				});	
+			}					
+		}
+		if(tableData.length > 1)
+        		table.appendRows(tableData);
+		doneCallback();
+	}
+#end
+#end
+   	};
+    
+    var login = function login(user, pwd, table, doneCallback){
+            debugger;
+            var data = new FormData();
+            data.append('user', user);
+            data.append('password', pwd);
+            var xhr = new XMLHttpRequest();           
+            xhr.open('POST', "$tableauUtil.createLoginUrl($connectionContext)", true);
+            xhr.onload = function () {
+                sessionId = $.parseJSON(this.response); 
+                getData(table, doneCallback);              
+            }
+            xhr.send(data);
+    };  
+    
+    myConnector.getSchema = function (schemaCallback) {
+    	//debugger;
+    	tableau.log("getSchema");
+    	var tableInfos = [];
+#foreach($type in $model.types)
+	
+		var ${type.name}Cols = [
+#foreach($prop in $type.properties)
+#if($prop.isRefId)
+			{ id : "${prop.name}Id", alias : "${prop.name}Id", dataType : $tableauUtil.getDataType($prop.getType()) },
+#else
+			{ id : "$prop.name", alias : "$prop.name", dataType : $tableauUtil.getDataType($prop.getType()) },
+#end
+#end
+		];
+	
+		var ${type.name}TableInfo = {	
+			id : "${type.id}".split('.').join("_"),
+			alias : "${type.name}",
+			columns : ${type.name}Cols
+		};
+		
+		tableInfos.push(${type.name}TableInfo);	
+#end
+#if($useConnection)
+		var standardConnection = {
+    		"alias": "$connectionContext.alias",
+    		"tables": [
+#foreach($table in $connectionContext.tables)    		
+    		{
+        		"id" : "$table.id",
+        		"alias" : "$table.alias",
+   			},     	
+#end
+			],
+
+    		"joins": [
+#foreach($join in $connectionContext.joins)
+	    		{
+	        	"left": {
+	            	"tableAlias": "$join.left.alias",
+	            	"columnId": "$join.left.id"
+	        	},
+	        	"right": {
+	            	"tableAlias": "$join.right.alias",
+	            	"columnId": "$join.right.id"
+	        	},
+	        	"joinType": "$join.type"
+	    		},
+#end
+    		]
+		};
+		schemaCallback(tableInfos, [standardConnection]);
+#else
+		var standardConnection = {
+    		"alias": "LEAN_Demand",
+    		"tables": [
+            {    		
+        		"id" : "com_adidas_model_itasset_LEAN_Demand",
+        		"alias" : "LEAN_Demand",
+   			},     	
+    		{
+        		"id" : "com_adidas_model_itasset_PMO_Project",
+        		"alias" : "PMO_Project",
+   			},     	
+    		{
+        		"id" : "com_adidas_model_itasset_LEAN_Application",
+        		"alias" : "LEAN_Application",
+   			},     	
+    		{
+        		"id" : "com_adidas_model_itasset_LEAN_BusinessCapability",
+        		"alias" : "LEAN_BusinessCapability",
+   			},
+            {
+                
+        		"id" : "com_adidas_model_itasset_LEAN_Provider",
+        		"alias" : "LEAN_Provider",
+   			},
+            {
+        		"id" : "com_adidas_model_itasset_LEAN_Demand_applications",
+        		"alias" : "lean_demand_applications",
+   			},     	
+    		{
+        		"id" : "com_adidas_model_itasset_LEAN_Demand_businessCapabilities",
+        		"alias" : "lean_demand_businessCapabilities",
+   			},
+            {                
+        		"id" : "com_adidas_model_itasset_LEAN_Demand_providers",
+        		"alias" : "lean_demand_providers",
+   			}],
+    		"joins" : [
+	    		{
+	        	"left": {
+	            	"tableAlias": "LEAN_Demand",
+	            	"columnId": "pmoProjectId"
+	        	},
+	        	"right": {
+	            	"tableAlias": "PMO_Project",
+	            	"columnId": "tfid"
+	        	},
+	        	"joinType": "inner"
+	    		}
+                ,
+	    		{
+	        	"left": {
+	            	"tableAlias": "LEAN_Demand",
+	            	"columnId": "id"
+	        	},
+	        	"right": {
+	            	"tableAlias": "lean_demand_applications",
+	            	"columnId": "lean_demandId"
+	        	},
+	        	"joinType": "inner"
+	    		}
+                ,
+                {
+	        	"left": {
+	            	"tableAlias": "LEAN_Demand",
+	            	"columnId": "id"
+	        	},
+	        	"right": {
+	            	"tableAlias": "lean_demand_businessCapabilities",
+	            	"columnId": "lean_demandId"
+	        	},
+	        	"joinType": "inner"
+	    		}
+                ,
+                {
+	        	"left": {
+	            	"tableAlias": "LEAN_Demand",
+	            	"columnId": "id"
+	        	},
+	        	"right": {
+	            	"tableAlias": "lean_demand_providers",
+	            	"columnId": "lean_demandId"
+	        	},
+	        	"joinType": "inner"
+	    		},
+                {
+	        	"left": {
+	            	"tableAlias": "lean_demand_applications",
+	            	"columnId": "lean_applicationId"
+	        	},
+	        	"right": {
+	            	"tableAlias": "LEAN_Application",
+	            	"columnId": "id"
+	        	},
+	        	"joinType": "inner"
+	    		}
+                ,
+                {
+	        	"left": {
+	            	"tableAlias": "lean_demand_businessCapabilities",
+	            	"columnId": "lean_businesscapabilityId"
+	        	},
+	        	"right": {
+	            	"tableAlias": "LEAN_BusinessCapability",
+	            	"columnId": "id"
+	        	},
+	        	"joinType": "inner"
+	    		}
+                ,
+                {
+	        	"left": {
+	            	"tableAlias": "lean_demand_providers",
+	            	"columnId": "lean_providerId"
+	        	},
+	        	"right": {
+	            	"tableAlias": "LEAN_Provider",
+	            	"columnId": "id"
+	        	},
+	        	"joinType": "inner"
+	    		}
+    		]
+		};
+		schemaCallback(tableInfos, [standardConnection]);
+#end	
+	};
+	
+	myConnector.getData = function (table, doneCallback) {
+		login("cortex", "cortex", table, doneCallback;	
+	};
+
+	myConnector.init = function(initCallback) {
+		initCallback();
+		tableau.connectionName = "$connectionContext.name";
+		tableau.submit();
+	};
+	
+    tableau.registerConnector(myConnector);    
+    
+    //setCookie("connectionName", "$connectionContext.name");
+   	//setCookie("loginURL", "$tableauUtil.createLoginUrl($connectionContext)"); 
+    
+})();

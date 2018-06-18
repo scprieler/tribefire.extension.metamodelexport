@@ -1,0 +1,105 @@
+<html>
+
+<head>
+	<style>
+	
+		*{font-family: "Open Sans"; color: rgb(150, 150, 150); font-size: 10pt}
+		
+		body, html{margin:0; padding:0; width: 100%; height:100%; overflow:hidden;}
+		
+		#wrapper{
+			position: relative;
+			width: ${viewportSize}px;
+			height: ${viewportSize}px;
+			margin:0 auto;
+		}
+		
+		#decoration{
+			position:absolute;
+			top:0;
+			left:0;			
+			z-index:2			
+		}
+		
+		#svg{
+			position:absolute;
+			top:0;
+			left:0;
+			z-index:1	
+		}
+		
+		.node{
+			position: absolute;
+			display:flex;
+			justify-content: center;
+			align-items: center;
+		}
+		
+	</style>
+</head>
+
+<body>
+<div id="wrapper">
+<div id="decoration">
+
+	#foreach( $node in $mgs.nodes.values() )
+		#desc ($node)	
+	#end
+
+</div>
+<svg id="svg" width="${viewportSize}" height="${viewportSize}">
+	<g>
+	#foreach( $node in $mgs.nodes.values() )
+		#circle ($node)	
+	#end
+	</g>
+	<g>
+	#foreach( $edge in $mgs.edges.values() )
+		#curve ($edge)
+	#end
+	</g>
+	<g>
+	#foreach( $edge in $mgs.edges.values() )
+		#decorator ($edge)
+	#end
+	</g>
+</svg>
+</div>
+</body>
+</html>
+
+#macro ( desc $n)
+#set($size = $n.radius*2)
+#set($x = $n.center.x - $n.radius)
+#set($y = $n.center.y - $n.radius)
+	<div class="node" style="width:$size;height:$size;top:$y;left:$x"><div>$n.text</div></div>
+#end
+
+#macro ( circle $n )
+<circle r="$n.radius" style="fill:white;stroke:#969696;stroke-width:2" cx="$n.center.x" cy="$n.center.y"></circle>
+#end
+
+#macro ( curve $e)
+#set($color = $RenderUtils.toHex($e.color))
+<path d="#bezier1($e, $RenderUtils.negativeTurningPoint($e))" 
+name="$e.name" cursor="pointer" id="$e.name"
+style="stroke:$color;stroke-width:2;fill:none;opacity:1"></path>
+
+<path d="#bezier2($e, $RenderUtils.turningPoint($e))"
+name="$e.name" cursor="pointer" id="$e.name"
+style="stroke:$color;stroke-width:2;fill:none;opacity:1"></path>
+
+#end
+
+#macro (bezier1 $e $neg)
+M$e.end.x,$e.end.y C$e.endControl.x,$e.endControl.y $neg.x(),$neg.y() $e.turning.x,$e.turning.y 
+#end
+
+#macro (bezier2 $e $tp)
+M$e.turning.x,$e.turning.y C$tp.x(),$tp.y() $e.startControl.x,$e.startControl.y $e.start.x,$e.start.y
+#end
+
+#macro (decorator $e)
+$RenderUtils.aggregation($e,true)
+$RenderUtils.aggregation($e,false)
+#end
