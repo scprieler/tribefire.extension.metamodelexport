@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ ============================================================================
+ Braintribe IT-Technologies GmbH - www.braintribe.com
+ Copyright Braintribe IT-Technologies GmbH, Austria, 2002-2017 - All Rights Reserved
+ It is strictly forbidden to copy, modify, distribute or use this code without written permission
+ To this file the Braintribe License Agreement applies.
+ ============================================================================
+-->
+
+<project xmlns:bt="antlib:com.braintribe.build.ant.tasks" name="codebase-build-script" default="transitive-build">
+
+	<target name="transitive-build">
+
+		<bt:ensureRange input="${range}" outputProperty="ensuredRange" ignoreProperty="ignoreRange" root="${basedir}" expand="true"/>
+
+		<fail unless="ensuredRange"/>
+		<property name="target" value="install"/>
+
+		<bt:buildSet id="buildSet" buildRange="${ensuredRange}" codebaseRoot="${basedir}" codebasePattern="$${groupId}/$${artifactId}" groupsFolder="${basedir}" />
+
+		<echo message="${target}"/>
+
+		<bt:transitive-build mode="individual" target="${target}" buildSetRefId="buildSet" ignore="${ignoreRange}" />
+	</target>
+
+</project>
